@@ -90,10 +90,6 @@ An Android application for managing and displaying live scores for table footbal
 - Kotlinx Serialization JSON
 - OkHttp 4.12.0
 
-## License
-
-[To be determined]
-
 ## Contributing
 
 This project was initially created using Cursor and needs refinement. Contributions are welcome to:
