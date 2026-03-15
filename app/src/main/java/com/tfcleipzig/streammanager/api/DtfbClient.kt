@@ -46,7 +46,7 @@ class DtfbClient(context: Context) {
                 }
 
                 val parsedJson: JsonElement =
-                        Json { prettyPrint = true }.parseToJsonElement(responseBody)
+                        json.parseToJsonElement(responseBody)
                 Log.d(TAG, "Parsed JSON: $parsedJson")
 
                 val leagueResponse =
