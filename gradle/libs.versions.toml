@@ -9,7 +9,7 @@ appcompat = "1.7.1"
 kotlinxSerializationJson = "1.10.0"
 material = "1.13.0"
 activity = "1.13.0"
-constraintlayout = "2.1.4"
+constraintlayout = "2.2.1"
 okhttp = "5.3.2"
 
 [libraries]
