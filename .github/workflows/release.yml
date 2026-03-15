@@ -2,6 +2,10 @@ name: Release APK
 
 on:
   push:
+    tags: ['v*']
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -31,21 +35,13 @@ jobs:
       - name: Build release APK
         run: ./gradlew assembleRelease
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: TFCStreamManager-apk
-          path: app/build/outputs/apk/release/app-release.apk
-
       - name: Rename APK
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          mv app/build/outputs/apk/release/app-release.apk "app/build/outputs/apk/release/TFCStreamManager-${TAG}.apk"
+        run: mv app/build/outputs/apk/release/app-release.apk "TFCStreamManager-${{ github.ref_name }}.apk"
 
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
-          files: app/build/outputs/apk/release/TFCStreamManager-*.apk
+          tag_name: ${{ github.ref_name }}
+          name: TFC Stream Manager Android ${{ github.ref_name }}
+          body: "Release ${{ github.ref_name }}"
+          files: TFCStreamManager-*.apk
