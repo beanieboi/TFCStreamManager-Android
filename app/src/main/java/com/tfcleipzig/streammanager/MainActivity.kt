@@ -10,7 +10,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.core.view.GestureDetectorCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.tfcleipzig.streammanager.databinding.ActivityMainBinding
@@ -101,7 +100,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupScoreGestureDetector(scoreView: TextView) {
-        val gestureDetector = GestureDetectorCompat(
+        val gestureDetector = GestureDetector(
                 this,
                 object : GestureDetector.SimpleOnGestureListener() {
                     override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
