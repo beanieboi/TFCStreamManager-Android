@@ -33,13 +33,13 @@ class DtfbClient(context: Context) {
                         Request.Builder().url(url).addHeader("Accept", "application/json").build()
 
                 val response = client.newCall(request).execute()
-                val responseBody = response.body?.string()
+                val responseBody = response.body.string()
 
                 Log.d(TAG, "Response code: ${response.code}")
-                Log.d(TAG, "Response body length: ${responseBody?.length ?: 0}")
-                Log.d(TAG, "Response body preview: ${responseBody?.takeLast(100)}")
+                Log.d(TAG, "Response body length: ${responseBody.length}")
+                Log.d(TAG, "Response body preview: ${responseBody.takeLast(100)}")
 
-                if (!response.isSuccessful || responseBody == null) {
+                if (!response.isSuccessful) {
                     return@withContext Result.failure(
                             Exception("Failed to fetch data: ${response.code}")
                     )
@@ -70,9 +70,9 @@ class DtfbClient(context: Context) {
                         Request.Builder().url(url).addHeader("Accept", "application/json").build()
 
                 val response = client.newCall(request).execute()
-                val responseBody = response.body?.string()
+                val responseBody = response.body.string()
 
-                if (!response.isSuccessful || responseBody == null) {
+                if (!response.isSuccessful) {
                     return@withContext Result.failure(
                             Exception("Failed to fetch team details: ${response.code}")
                     )
