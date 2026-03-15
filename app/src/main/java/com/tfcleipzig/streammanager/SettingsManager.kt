@@ -1,13 +1,19 @@
 package com.tfcleipzig.streammanager
 
 import android.content.Context
-import android.content.SharedPreferences
 import android.util.Log
+import android.content.SharedPreferences
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 object SettingsManager {
+        private const val TAG = "SettingsManager"
         private lateinit var prefs: SharedPreferences
-        private var gameState: GameState = GameState()
-        private val TAG = "SettingsManager"
+        private val json = Json { ignoreUnknownKeys = true }
+
+        private const val KEY_LEAGUE_URL = "league_url"
+        private const val KEY_EVENT_NAME = "event_name"
+        private const val KEY_GAME_STATE = "game_state"
 
         const val DEFAULT_URL =
                 "https://mtfv.de/ligabetrieb/aktuelle-saison?format=json"
@@ -22,54 +28,50 @@ object SettingsManager {
 
         fun saveGameSettings(settings: GameState) {
                 Log.d(TAG, "Saving game settings: teamA=${settings.teamA}, teamB=${settings.teamB}")
-                gameState = settings
+                prefs.edit().putString(KEY_GAME_STATE, json.encodeToString(settings)).apply()
         }
 
         fun getGameSettings(): GameState {
-                Log.d(
-                        TAG,
-                        "Getting game settings: teamA=${gameState.teamA}, teamB=${gameState.teamB}"
-                )
-                return gameState
+                val stored = prefs.getString(KEY_GAME_STATE, null)
+                val state = if (stored != null) {
+                        try {
+                                json.decodeFromString<GameState>(stored)
+                        } catch (e: Exception) {
+                                Log.e(TAG, "Failed to parse saved game state", e)
+                                GameState()
+                        }
+                } else {
+                        GameState(eventName = getEventName())
+                }
+                Log.d(TAG, "Getting game settings: teamA=${state.teamA}, teamB=${state.teamB}")
+                return state
         }
 
         fun saveLeagueUrl(url: String) {
                 Log.d(TAG, "Saving league URL: $url")
-                prefs.edit().apply {
-                        putString("league_url", url)
-                        apply()
-                }
+                prefs.edit().putString(KEY_LEAGUE_URL, url).apply()
         }
 
         fun getLeagueUrl(): String {
-                val url = prefs.getString("league_url", DEFAULT_URL) ?: DEFAULT_URL
+                val url = prefs.getString(KEY_LEAGUE_URL, DEFAULT_URL) ?: DEFAULT_URL
                 Log.d(TAG, "Loading league URL: $url")
                 return url
         }
 
         fun saveEventName(eventName: String) {
                 Log.d(TAG, "Saving event name: $eventName")
-                prefs.edit().apply {
-                        putString("event_name", eventName)
-                        apply()
-                }
+                prefs.edit().putString(KEY_EVENT_NAME, eventName).apply()
         }
 
         fun getEventName(): String {
                 val eventName =
-                        prefs.getString("event_name", DEFAULT_EVENT_NAME) ?: DEFAULT_EVENT_NAME
+                        prefs.getString(KEY_EVENT_NAME, DEFAULT_EVENT_NAME) ?: DEFAULT_EVENT_NAME
                 Log.d(TAG, "Loading event name: $eventName")
                 return eventName
         }
 
         fun clearSettings() {
                 Log.d(TAG, "Clearing all settings")
-                val editor = prefs.edit()
-                editor.clear()
-                editor.putString("league_url", DEFAULT_URL)
-                editor.apply()
-
-                // Reset game settings to default
-                gameState = GameState()
+                prefs.edit().clear().putString(KEY_LEAGUE_URL, DEFAULT_URL).apply()
         }
 }
