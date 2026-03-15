@@ -1,19 +1,35 @@
 package com.tfcleipzig.streammanager
 
 import android.util.Log
-import java.io.OutputStreamWriter
-import java.net.HttpURLConnection
-import java.net.URL
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.concurrent.TimeUnit
 
 class ScoreUpdater {
-    private val TAG = "ScoreUpdater"
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private data class GameInfo(
-            val teamA: String,
-            val teamB: String,
+    private val client = OkHttpClient.Builder()
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(5, TimeUnit.SECONDS)
+            .build()
+
+    private val json = Json { encodeDefaults = true }
+
+    @Serializable
+    private data class ScorePayload(
+            val teamAScore: Int,
+            val teamBScore: Int,
+            val teamAName: String,
+            val teamBName: String,
             val teamAPlayer: String,
             val teamBPlayer: String,
             val eventName: String
@@ -28,74 +44,40 @@ class ScoreUpdater {
     ) {
         Log.d(TAG, "Updating scores: $host:$port, teamA: $teamAScore, teamB: $teamBScore")
 
-        CoroutineScope(Dispatchers.IO).launch {
+        scope.launch {
             try {
-                val url = URL("http://$host:$port/scores")
-                val connection = url.openConnection() as HttpURLConnection
-                setupConnection(connection)
+                val payload = ScorePayload(
+                        teamAScore = teamAScore,
+                        teamBScore = teamBScore,
+                        teamAName = gameState.teamA,
+                        teamBName = gameState.teamB,
+                        teamAPlayer = gameState.teamAPlayer,
+                        teamBPlayer = gameState.teamBPlayer,
+                        eventName = gameState.eventName
+                )
 
-                val jsonPayload =
-                        createJsonPayload(
-                                teamAScore,
-                                teamBScore,
-                                gameState.teamA,
-                                gameState.teamB,
-                                gameState.teamAPlayer,
-                                gameState.teamBPlayer,
-                                gameState.eventName
-                        )
-                Log.d(TAG, "Sending payload: $jsonPayload")
+                val body = json.encodeToString(payload)
+                        .toRequestBody("application/json".toMediaType())
 
-                sendPayload(connection, jsonPayload)
-                handleResponse(connection)
+                val request = Request.Builder()
+                        .url("http://$host:$port/scores")
+                        .post(body)
+                        .build()
+
+                val response = client.newCall(request).execute()
+                if (response.isSuccessful) {
+                    Log.d(TAG, "Scores updated successfully")
+                } else {
+                    Log.e(TAG, "Failed to update scores: HTTP ${response.code}")
+                }
+                response.close()
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating scores", e)
             }
         }
     }
 
-    private fun setupConnection(connection: HttpURLConnection) {
-        connection.requestMethod = "POST"
-        connection.setRequestProperty("Content-Type", "application/json")
-        connection.doOutput = true
-    }
-
-    private fun createJsonPayload(
-            teamAScore: Int,
-            teamBScore: Int,
-            teamA: String,
-            teamB: String,
-            teamAPlayer: String,
-            teamBPlayer: String,
-            eventName: String
-    ): String {
-        return """
-        {
-            "teamAScore": $teamAScore,
-            "teamBScore": $teamBScore,
-            "teamAName": "$teamA",
-            "teamBName": "$teamB",
-            "teamAPlayer": "$teamAPlayer",
-            "teamBPlayer": "$teamBPlayer",
-            "eventName": "$eventName"
-        }
-        """.trimIndent()
-    }
-
-    private fun sendPayload(connection: HttpURLConnection, jsonPayload: String) {
-        OutputStreamWriter(connection.outputStream).use { writer ->
-            writer.write(jsonPayload)
-            writer.flush()
-        }
-    }
-
-    private fun handleResponse(connection: HttpURLConnection) {
-        val responseCode = connection.responseCode
-        if (responseCode == HttpURLConnection.HTTP_OK) {
-            Log.d(TAG, "Scores updated successfully")
-        } else {
-            Log.e(TAG, "Failed to update scores: HTTP $responseCode")
-        }
-        connection.disconnect()
+    companion object {
+        private const val TAG = "ScoreUpdater"
     }
 }
