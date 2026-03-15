@@ -1,30 +1,24 @@
 package com.tfcleipzig.streammanager
 
 import android.content.Context
+import android.util.Log
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
-import android.util.Log
 import kotlinx.coroutines.*
 
 class NsdHelper(private val context: Context, private val onStatusUpdate: (String) -> Unit) {
-    private val TAG = "NsdHelper"
-    private val SERVICE_TYPE = "_http._tcp."
-    private val TARGET_SERVICE_NAME = "TFCStream"
-    private val DISCOVERY_INTERVAL = 2000L // 2 seconds in milliseconds
-    private val MONITORING_INTERVAL = 2000L // 2 seconds in milliseconds
 
-    private var nsdManager: NsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
+    private val nsdManager: NsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var discoveryListener: NsdManager.DiscoveryListener? = null
     private var discoveryJob: Job? = null
     private var monitoringJob: Job? = null
     private var isServiceFound = false
     private var lastServiceFoundTime = 0L
 
-    // Add properties to store connection details
     private var _serverHost: String? = null
     private var _serverPort: Int = -1
 
-    // Expose connection details as read-only properties
     val serverHost: String?
         get() = _serverHost
 
@@ -34,42 +28,36 @@ class NsdHelper(private val context: Context, private val onStatusUpdate: (Strin
     fun getConnectionDetails(): Pair<String?, Int?> = Pair(serverHost, serverPort)
 
     fun startDiscovery() {
-        isServiceFound = false
         discoveryJob?.cancel()
         monitoringJob?.cancel()
+        isServiceFound = false
 
         startMonitoring()
         startDiscoveryLoop()
     }
 
     private fun startDiscoveryLoop() {
-        discoveryJob =
-                CoroutineScope(Dispatchers.Main).launch {
-                    while (isActive && !isServiceFound) {
-                        startSingleDiscovery()
-                        delay(DISCOVERY_INTERVAL)
-                    }
-                }
+        discoveryJob?.cancel()
+        discoveryJob = scope.launch {
+            while (isActive && !isServiceFound) {
+                startSingleDiscovery()
+                delay(DISCOVERY_INTERVAL)
+            }
+        }
     }
 
     private fun startMonitoring() {
-        monitoringJob =
-                CoroutineScope(Dispatchers.Main).launch {
-                    while (isActive) {
-                        if (isServiceFound) {
-                            // If service hasn't been seen for more than 2 intervals, consider it
-                            // lost
-                            if (System.currentTimeMillis() - lastServiceFoundTime >
-                                            MONITORING_INTERVAL * 2
-                            ) {
-                                Log.d(TAG, "Service timeout detected")
-                                handleServiceLost()
-                                startDiscoveryLoop()
-                            }
-                        }
-                        delay(MONITORING_INTERVAL)
-                    }
+        monitoringJob = scope.launch {
+            while (isActive) {
+                if (isServiceFound &&
+                        System.currentTimeMillis() - lastServiceFoundTime > MONITORING_INTERVAL * 2
+                ) {
+                    Log.d(TAG, "Service timeout detected")
+                    handleServiceLost()
                 }
+                delay(MONITORING_INTERVAL)
+            }
+        }
     }
 
     private fun handleServiceLost() {
@@ -77,11 +65,11 @@ class NsdHelper(private val context: Context, private val onStatusUpdate: (Strin
         _serverHost = null
         _serverPort = -1
         onStatusUpdate("Service lost - searching...")
-        startDiscovery()
+        startDiscoveryLoop()
     }
 
     private fun startSingleDiscovery() {
-        stopCurrentDiscovery() // Stop current discovery listener only
+        stopCurrentDiscovery()
 
         discoveryListener =
                 object : NsdManager.DiscoveryListener {
@@ -96,7 +84,6 @@ class NsdHelper(private val context: Context, private val onStatusUpdate: (Strin
                     }
 
                     override fun onDiscoveryStarted(serviceType: String) {
-                        // Log.d(TAG, "Discovery started")
                         if (!isServiceFound) {
                             onStatusUpdate(
                                     "Discovery active: Searching for $TARGET_SERVICE_NAME..."
@@ -105,14 +92,12 @@ class NsdHelper(private val context: Context, private val onStatusUpdate: (Strin
                     }
 
                     override fun onDiscoveryStopped(serviceType: String) {
-                        // Log.d(TAG, "Discovery stopped")
                         if (!isServiceFound) {
                             onStatusUpdate("Discovery stopped - retrying...")
                         }
                     }
 
                     override fun onServiceFound(service: NsdServiceInfo) {
-                        // Only resolve if it's our target service
                         if (service.serviceName.contains(TARGET_SERVICE_NAME, ignoreCase = true)) {
                             lastServiceFoundTime = System.currentTimeMillis()
 
@@ -126,8 +111,6 @@ class NsdHelper(private val context: Context, private val onStatusUpdate: (Strin
                     override fun onServiceLost(service: NsdServiceInfo) {
                         if (service.serviceName.contains(TARGET_SERVICE_NAME, ignoreCase = true)) {
                             Log.d(TAG, "Target service lost: ${service.serviceName}")
-                            _serverHost = null
-                            _serverPort = -1
                             handleServiceLost()
                         }
                     }
@@ -142,26 +125,38 @@ class NsdHelper(private val context: Context, private val onStatusUpdate: (Strin
     }
 
     private fun resolveService(service: NsdServiceInfo) {
-        nsdManager.resolveService(
+        nsdManager.registerServiceInfoCallback(
                 service,
-                object : NsdManager.ResolveListener {
-                    override fun onResolveFailed(service: NsdServiceInfo, errorCode: Int) {
-                        Log.e(TAG, "Resolve failed: $errorCode")
+                { it.run() },
+                object : NsdManager.ServiceInfoCallback {
+                    override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {
+                        Log.e(TAG, "Service info callback registration failed: $errorCode")
                         onStatusUpdate("Service resolution failed")
                         isServiceFound = false
                         _serverHost = null
                         _serverPort = -1
                     }
 
-                    override fun onServiceResolved(service: NsdServiceInfo) {
-                        Log.d(TAG, "Resolve succeeded: ${service.serviceName}")
-                        Log.d(TAG, "Host: ${service.host.hostAddress}, Port: ${service.port}")
+                    override fun onServiceInfoCallbackUnregistered() {}
 
-                        _serverHost = service.host.hostAddress
+                    override fun onServiceUpdated(service: NsdServiceInfo) {
+                        val host = service.hostAddresses.firstOrNull()?.hostAddress
+                        Log.d(TAG, "Resolve succeeded: ${service.serviceName}")
+                        Log.d(TAG, "Host: $host, Port: ${service.port}")
+
+                        _serverHost = host
                         _serverPort = service.port
 
                         isServiceFound = true
+                        lastServiceFoundTime = System.currentTimeMillis()
                         onStatusUpdate("Connected to ${service.serviceName}")
+                        nsdManager.unregisterServiceInfoCallback(this)
+                    }
+
+                    override fun onServiceLost() {
+                        Log.d(TAG, "Service lost during resolution")
+                        handleServiceLost()
+                        nsdManager.unregisterServiceInfoCallback(this)
                     }
                 }
         )
@@ -179,16 +174,17 @@ class NsdHelper(private val context: Context, private val onStatusUpdate: (Strin
     }
 
     fun stopDiscovery() {
-        discoveryJob?.cancel()
-        discoveryJob = null
-        monitoringJob?.cancel()
-        monitoringJob = null
+        scope.cancel()
         stopCurrentDiscovery()
         _serverHost = null
         _serverPort = -1
     }
 
     companion object {
+        private const val TAG = "NsdHelper"
+        private const val SERVICE_TYPE = "_http._tcp."
         const val TARGET_SERVICE_NAME = "TFCStreamServer"
+        private const val DISCOVERY_INTERVAL = 2000L
+        private const val MONITORING_INTERVAL = 2000L
     }
 }
