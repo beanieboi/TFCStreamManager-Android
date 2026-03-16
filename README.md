@@ -5,53 +5,84 @@ An Android application for managing and displaying live scores for table footbal
 ## Features
 
 - **Live Score Management**: Track and update scores for two teams in real-time
-- **Network Service Discovery (NSD)**: Automatically discovers and connects to TFC Stream Server on the local network
-- **Player Selection**: Select players for each team from the league database
-- **MTFV League Integration**: Fetches team and player data from MTFV league API
-- **Persistent Score Storage**: Saves scores locally to prevent data loss
-- **Landscape Mode**: Optimized for landscape orientation display
+- **Network Service Discovery (NSD)**: Automatically discovers and connects to TFCStreamServer on the local network via mDNS
+- **Player Selection**: Select up to two players per team from the league database
+- **MTFV League Integration**: Fetches team and player data from the MTFV league API
+- **Persistent Storage**: Saves scores and game state locally via SharedPreferences
+- **Server Sync**: Automatically pushes score updates to the connected stream server via HTTP POST
+- **Landscape Mode**: Forced landscape orientation for optimal display
 
 ## Technical Stack
 
-- **Language**: Kotlin
-- **Minimum SDK**: 22 (Android 5.1)
+- **Language**: Kotlin 2.3.10
+- **Minimum SDK**: 34 (Android 14)
 - **Target SDK**: 35 (Android 15)
-- **Architecture**: Single Activity with Settings
-- **Networking**: OkHttp for API calls, NSD for local server discovery
-- **Serialization**: Kotlinx Serialization
+- **Compile SDK**: 36
+- **Gradle**: 9.4.0
+- **Java Compatibility**: 11
+- **Build Features**: ViewBinding
+- **Networking**: OkHttp 5.3.2, NSD for local server discovery
+- **Serialization**: Kotlinx Serialization JSON 1.10.0
+- **UI**: Material Components 1.13.0, ConstraintLayout 2.2.1
 
 ## Key Components
 
 ### MainActivity
-- Main score display and control interface
-- Handles score increment/decrement via tap/double-tap gestures
-- Manages player selection dropdowns
-- Displays connection status indicator
-
-### NsdHelper
-- Discovers "TFCStream" service on local network using mDNS
-- Monitors connection status and handles reconnection
-- Provides server host and port for score updates
-
-### ScoreUpdater
-- Sends score updates to the discovered TFC Stream Server
-- Posts JSON payload with scores, team names, player names, and event info
-
-### DtfbClient
-- Fetches league data from MTFV API
-- Retrieves team listings and player rosters
-- Handles JSON parsing of league responses
+- Main score display with two large tap-sensitive score views
+- Single tap increments score, double-tap decrements (minimum 0)
+- Status dot indicator: green (connected) / red (disconnected)
+- Four player dropdowns (two per team) using AutoCompleteTextView
+- Settings FAB launching SettingsActivity
 
 ### SettingsActivity
-- Allows selection of teams from the league
-- Configures event name
-- Option to change league URL (defaults to MTFV Landesliga)
+- Load Teams button to fetch teams from the MTFV API
+- Team A / Team B selection dropdowns (prevents selecting the same team twice)
+- Event name configuration (default: "MTFV Landesliga 2025")
+- League URL field (hidden, defaults to MTFV Landesliga)
+- Reset Scores and Clear Settings buttons
+
+### GameState
+- Serializable data class holding team names, player names, and event name
+- Player names stored as "Player1 / Player2" format for doubles
+
+### ScoreManager
+- SharedPreferences-based score persistence (left_score, right_score)
+
+### SettingsManager
+- Singleton managing SharedPreferences for league URL, event name, and serialized game state
+
+### TeamDataStore
+- Singleton with volatile in-memory cache for teams and player lists
+- Thread-safe via ConcurrentHashMap
+
+### NsdHelper
+- Discovers `_http._tcp.` services named "TFCStreamServer" (case-insensitive)
+- Auto-retries discovery every 2 seconds
+- Monitors service health every 2 seconds with a 4-second timeout
+- Reports connection status via callback
+
+### ScoreUpdater
+- Sends POST requests to `http://{host}:{port}/scores` with JSON payload
+- Payload: `teamAScore`, `teamBScore`, `teamAName`, `teamBName`, `teamAPlayer`, `teamBPlayer`, `eventName`
+- 5-second connection/read/write timeouts
+- Runs on Kotlin Coroutines IO dispatcher
+
+### PlayerDropdownHelper
+- Manages two-player selection per team
+- "No player" option for clearing selection
+- Player 2 field disabled until Player 1 is selected
+
+### DtfbClient
+- Fetches league teams from configurable URL
+- Fetches player rosters per team ID
+- Returns `Result<>` for error handling
+- 10-second timeouts, lenient JSON parsing
 
 ## Configuration
 
-### Hardcoded URLs (to be refactored)
-- MTFV League API: `https://mtfv.de/ligabetrieb/aktuelle-saison?format=json`
-- Team Details API: `https://mtfv.de/ligabetrieb/aktuelle-saison?task=team_details&id={teamId}&format=json`
+### API URLs
+- League API (configurable, default): `https://mtfv.de/ligabetrieb/aktuelle-saison?format=json`
+- Team Details API (hardcoded): `https://mtfv.de/ligabetrieb/aktuelle-saison?task=team_details&id={teamId}&format=json`
 
 ### Network Permissions Required
 - `INTERNET`
@@ -59,42 +90,37 @@ An Android application for managing and displaying live scores for table footbal
 - `ACCESS_WIFI_STATE`
 - `CHANGE_WIFI_MULTICAST_STATE`
 
-## Setup Instructions
+## Setup
 
 1. Clone the repository
 2. Open in Android Studio
 3. Sync Gradle dependencies
-4. Build and run on a device/emulator (minimum API 22)
+4. Build and run on a device/emulator (minimum API 34)
 
 ## Usage
 
-1. Launch the app - it will automatically search for a TFC Stream Server on the network
-2. Go to Settings (floating action button) to select teams
-3. Select players for each team using the dropdown menus
-4. Tap on a score to increment, double-tap to decrement
-5. Scores are automatically sent to the connected server and saved locally
-
-## Known Issues & TODOs
-
-- Hardcoded URLs should be moved to configuration
-- No error handling UI for network failures
-- Missing unit and integration tests
-- Player selection UI could be improved
-- No manual server connection option
-- Settings are partially persisted (team names only, not players)
+1. Launch the app — it automatically searches for a TFCStreamServer on the network
+2. Go to Settings (FAB button) and tap "Load Teams" to fetch league data
+3. Select teams for each side
+4. Select players for each team using the dropdown menus
+5. Tap on a score to increment, double-tap to decrement
+6. Scores are automatically sent to the connected server and saved locally
 
 ## Dependencies
 
-- AndroidX Core KTX
-- Material Components
-- Kotlinx Serialization JSON
-- OkHttp 4.12.0
+| Dependency | Version |
+|---|---|
+| AndroidX Core KTX | 1.18.0 |
+| AndroidX AppCompat | 1.7.1 |
+| AndroidX Activity | 1.13.0 |
+| AndroidX ConstraintLayout | 2.2.1 |
+| Material Components | 1.13.0 |
+| Kotlinx Serialization JSON | 1.10.0 |
+| OkHttp | 5.3.2 |
 
-## Contributing
+## Known Issues & TODOs
 
-This project was initially created using Cursor and needs refinement. Contributions are welcome to:
-- Add proper configuration management
-- Improve error handling
-- Add comprehensive testing
-- Enhance UI/UX
-- Document the server protocol
+- Team details API URL is hardcoded
+- No error handling UI for network failures
+- No manual server connection option
+- Limited test coverage
