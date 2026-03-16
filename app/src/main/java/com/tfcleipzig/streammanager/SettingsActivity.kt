@@ -125,7 +125,7 @@ class SettingsActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                val dtfbClient = DtfbClient(this@SettingsActivity)
+                val dtfbClient = DtfbClient()
 
                 dtfbClient.getLeagueTeams()
                         .onSuccess { loadedTeams ->

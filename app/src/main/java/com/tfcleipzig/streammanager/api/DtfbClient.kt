@@ -1,6 +1,5 @@
 package com.tfcleipzig.streammanager.api
 
-import android.content.Context
 import android.util.Log
 import com.tfcleipzig.streammanager.SettingsManager
 import java.util.concurrent.TimeUnit
@@ -11,7 +10,7 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
-class DtfbClient(context: Context) {
+class DtfbClient {
     private val client =
             OkHttpClient.Builder()
                     .connectTimeout(10, TimeUnit.SECONDS)
@@ -21,13 +20,13 @@ class DtfbClient(context: Context) {
         ignoreUnknownKeys = true
         isLenient = true
     }
-    private val TAG = "DtfbClient"
+    private val tag = "DtfbClient"
 
     suspend fun getLeagueTeams(): Result<List<TeamEntry>> {
         return withContext(Dispatchers.IO) {
             try {
                 val url = SettingsManager.getLeagueUrl()
-                Log.d(TAG, "Requesting URL: $url")
+                Log.d(tag, "Requesting URL: $url")
 
                 val request =
                         Request.Builder().url(url).addHeader("Accept", "application/json").build()
@@ -35,9 +34,9 @@ class DtfbClient(context: Context) {
                 val response = client.newCall(request).execute()
                 val responseBody = response.body.string()
 
-                Log.d(TAG, "Response code: ${response.code}")
-                Log.d(TAG, "Response body length: ${responseBody.length}")
-                Log.d(TAG, "Response body preview: ${responseBody.takeLast(100)}")
+                Log.d(tag, "Response code: ${response.code}")
+                Log.d(tag, "Response body length: ${responseBody.length}")
+                Log.d(tag, "Response body preview: ${responseBody.takeLast(100)}")
 
                 if (!response.isSuccessful) {
                     return@withContext Result.failure(
@@ -47,13 +46,13 @@ class DtfbClient(context: Context) {
 
                 val parsedJson: JsonElement =
                         json.parseToJsonElement(responseBody)
-                Log.d(TAG, "Parsed JSON: $parsedJson")
+                Log.d(tag, "Parsed JSON: $parsedJson")
 
                 val leagueResponse =
                         json.decodeFromString<List<LeagueResponse>>(responseBody).first()
                 Result.success(leagueResponse.tabelle.tabelle)
             } catch (e: Exception) {
-                Log.e(TAG, "Error fetching teams", e)
+                Log.e(tag, "Error fetching teams", e)
                 Result.failure(e)
             }
         }
@@ -64,7 +63,7 @@ class DtfbClient(context: Context) {
             try {
                 val url =
                         "https://mtfv.de/ligabetrieb/aktuelle-saison?task=team_details&id=$teamId&format=json"
-                Log.d(TAG, "Requesting team details URL: $url")
+                Log.d(tag, "Requesting team details URL: $url")
 
                 val request =
                         Request.Builder().url(url).addHeader("Accept", "application/json").build()
@@ -81,7 +80,7 @@ class DtfbClient(context: Context) {
                 val teamDetails = json.decodeFromString<TeamDetailsResponse>(responseBody)
                 Result.success(teamDetails.data.mitglieder)
             } catch (e: Exception) {
-                Log.e(TAG, "Error fetching team players", e)
+                Log.e(tag, "Error fetching team players", e)
                 Result.failure(e)
             }
         }
