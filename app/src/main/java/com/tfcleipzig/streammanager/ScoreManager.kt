@@ -3,11 +3,16 @@ package com.tfcleipzig.streammanager
 import android.content.Context
 import android.content.SharedPreferences
 
-class ScoreManager(context: Context) {
+class ScoreManager(
+    context: Context,
+) {
     private val prefs: SharedPreferences =
-            context.getSharedPreferences("scores", Context.MODE_PRIVATE)
+        context.getSharedPreferences("scores", Context.MODE_PRIVATE)
 
-    fun saveScores(leftScore: Int, rightScore: Int) {
+    fun saveScores(
+        leftScore: Int,
+        rightScore: Int,
+    ) {
         prefs.edit().apply {
             putInt("left_score", leftScore)
             putInt("right_score", rightScore)

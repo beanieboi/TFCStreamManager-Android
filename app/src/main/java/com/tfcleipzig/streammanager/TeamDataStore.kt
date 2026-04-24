@@ -15,7 +15,10 @@ object TeamDataStore {
 
     fun getTeams(): List<TeamEntry> = teams
 
-    fun setTeamPlayers(teamId: String, players: List<Player>) {
+    fun setTeamPlayers(
+        teamId: String,
+        players: List<Player>,
+    ) {
         teamPlayers[teamId] = players.toList()
     }
 

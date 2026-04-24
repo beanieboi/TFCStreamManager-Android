@@ -5,10 +5,10 @@ import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 
 class PlayerDropdownHelper(
-        private val context: Context,
-        private val player1Select: AutoCompleteTextView,
-        private val player2Select: AutoCompleteTextView,
-        private val onPlayersChanged: (String) -> Unit
+    private val context: Context,
+    private val player1Select: AutoCompleteTextView,
+    private val player2Select: AutoCompleteTextView,
+    private val onPlayersChanged: (String) -> Unit,
 ) {
     companion object {
         private const val NO_PLAYER = "No player"
@@ -16,7 +16,10 @@ class PlayerDropdownHelper(
 
     private var playerNames: List<String> = emptyList()
 
-    fun setup(teamId: String?, currentPlayerString: String) {
+    fun setup(
+        teamId: String?,
+        currentPlayerString: String,
+    ) {
         if (teamId == null || !TeamDataStore.hasPlayersForTeam(teamId)) {
             player1Select.setAdapter(null)
             player2Select.setAdapter(null)
@@ -26,11 +29,12 @@ class PlayerDropdownHelper(
         val players = TeamDataStore.getTeamPlayers(teamId) ?: return
         playerNames = listOf(NO_PLAYER) + players.map { "${it.vorname} ${it.nachname}" }
 
-        val adapter = ArrayAdapter(
+        val adapter =
+            ArrayAdapter(
                 context,
                 android.R.layout.simple_dropdown_item_1line,
-                playerNames
-        )
+                playerNames,
+            )
         player1Select.setAdapter(adapter)
         player2Select.setAdapter(adapter)
 
@@ -70,11 +74,12 @@ class PlayerDropdownHelper(
                 onPlayersChanged("")
             } else {
                 player2Select.isEnabled = true
-                val combined = if (player2Text.isNotEmpty() && player2Text != NO_PLAYER) {
-                    "$selected / $player2Text"
-                } else {
-                    selected
-                }
+                val combined =
+                    if (player2Text.isNotEmpty() && player2Text != NO_PLAYER) {
+                        "$selected / $player2Text"
+                    } else {
+                        selected
+                    }
                 onPlayersChanged(combined)
             }
         }

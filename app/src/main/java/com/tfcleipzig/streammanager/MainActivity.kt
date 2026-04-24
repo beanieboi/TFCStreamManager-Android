@@ -1,8 +1,8 @@
 package com.tfcleipzig.streammanager
 
 import android.content.Intent
-import android.util.Log
 import android.os.Bundle
+import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.widget.TextView
@@ -24,19 +24,20 @@ class MainActivity : AppCompatActivity() {
     private lateinit var teamADropdownHelper: PlayerDropdownHelper
     private lateinit var teamBDropdownHelper: PlayerDropdownHelper
 
-    private val settingsLauncher = registerForActivityResult(
-            ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        Log.d(TAG, "Settings result: ${result.resultCode}")
-        gameState = SettingsManager.getGameSettings()
-        if (result.resultCode == RESULT_OK) {
-            val (savedTeamAScore, savedTeamBScore) = scoreManager.getScores()
-            binding.teamAScore.text = savedTeamAScore.toString()
-            binding.teamBScore.text = savedTeamBScore.toString()
-            updatePlayerDropdowns()
-            saveAndSendScoreUpdate()
+    private val settingsLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.StartActivityForResult(),
+        ) { result ->
+            Log.d(TAG, "Settings result: ${result.resultCode}")
+            gameState = SettingsManager.getGameSettings()
+            if (result.resultCode == RESULT_OK) {
+                val (savedTeamAScore, savedTeamBScore) = scoreManager.getScores()
+                binding.teamAScore.text = savedTeamAScore.toString()
+                binding.teamBScore.text = savedTeamBScore.toString()
+                updatePlayerDropdowns()
+                saveAndSendScoreUpdate()
+            }
         }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,25 +67,27 @@ class MainActivity : AppCompatActivity() {
         binding.teamAScore.text = savedTeamAScore.toString()
         binding.teamBScore.text = savedTeamBScore.toString()
 
-        teamADropdownHelper = PlayerDropdownHelper(
+        teamADropdownHelper =
+            PlayerDropdownHelper(
                 context = this,
                 player1Select = binding.teamAPlayer1Select,
-                player2Select = binding.teamAPlayer2Select
-        ) { players ->
-            gameState = gameState.copy(teamAPlayer = players)
-            SettingsManager.saveGameSettings(gameState)
-            saveAndSendScoreUpdate()
-        }
+                player2Select = binding.teamAPlayer2Select,
+            ) { players ->
+                gameState = gameState.copy(teamAPlayer = players)
+                SettingsManager.saveGameSettings(gameState)
+                saveAndSendScoreUpdate()
+            }
 
-        teamBDropdownHelper = PlayerDropdownHelper(
+        teamBDropdownHelper =
+            PlayerDropdownHelper(
                 context = this,
                 player1Select = binding.teamBPlayer1Select,
-                player2Select = binding.teamBPlayer2Select
-        ) { players ->
-            gameState = gameState.copy(teamBPlayer = players)
-            SettingsManager.saveGameSettings(gameState)
-            saveAndSendScoreUpdate()
-        }
+                player2Select = binding.teamBPlayer2Select,
+            ) { players ->
+                gameState = gameState.copy(teamBPlayer = players)
+                SettingsManager.saveGameSettings(gameState)
+                saveAndSendScoreUpdate()
+            }
 
         updatePlayerDropdowns()
     }
@@ -100,7 +103,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupScoreGestureDetector(scoreView: TextView) {
-        val gestureDetector = GestureDetector(
+        val gestureDetector =
+            GestureDetector(
                 this,
                 object : GestureDetector.SimpleOnGestureListener() {
                     override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
@@ -118,8 +122,8 @@ class MainActivity : AppCompatActivity() {
                         }
                         return true
                     }
-                }
-        )
+                },
+            )
 
         scoreView.setOnTouchListener { _, event ->
             gestureDetector.onTouchEvent(event)
@@ -128,19 +132,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun saveAndSendScoreUpdate() {
-        val teamAValue = binding.teamAScore.text.toString().toIntOrNull() ?: 0
-        val teamBValue = binding.teamBScore.text.toString().toIntOrNull() ?: 0
+        val teamAValue =
+            binding.teamAScore.text
+                .toString()
+                .toIntOrNull() ?: 0
+        val teamBValue =
+            binding.teamBScore.text
+                .toString()
+                .toIntOrNull() ?: 0
         scoreManager.saveScores(teamAValue, teamBValue)
 
         val (host, port) = nsdHelper.getConnectionDetails()
         Log.d(TAG, "saveAndSendScoreUpdate: host=$host, port=$port, scores=$teamAValue-$teamBValue")
         if (host != null && port != null) {
             scoreUpdater.updateScores(
-                    host = host,
-                    port = port,
-                    teamAScore = teamAValue,
-                    teamBScore = teamBValue,
-                    gameState = gameState,
+                host = host,
+                port = port,
+                teamAScore = teamAValue,
+                teamBScore = teamBValue,
+                gameState = gameState,
             )
         } else {
             Log.w(TAG, "No server connection - score update not sent")
@@ -150,11 +160,14 @@ class MainActivity : AppCompatActivity() {
     private fun updateStatusDot(isConnected: Boolean) {
         runOnUiThread {
             binding.statusDot.setBackgroundColor(
-                    ContextCompat.getColor(
-                            this,
-                            if (isConnected) R.color.status_connected
-                            else R.color.status_disconnected
-                    )
+                ContextCompat.getColor(
+                    this,
+                    if (isConnected) {
+                        R.color.status_connected
+                    } else {
+                        R.color.status_disconnected
+                    },
+                ),
             )
         }
     }

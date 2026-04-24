@@ -1,13 +1,22 @@
 package com.tfcleipzig.streammanager
 
 import android.content.Context
-import android.util.Log
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
-import kotlinx.coroutines.*
+import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
-class NsdHelper(private val context: Context, private val onStatusUpdate: (String) -> Unit) {
-
+class NsdHelper(
+    private val context: Context,
+    private val onStatusUpdate: (String) -> Unit,
+) {
     private val nsdManager: NsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var discoveryListener: NsdManager.DiscoveryListener? = null
@@ -38,26 +47,28 @@ class NsdHelper(private val context: Context, private val onStatusUpdate: (Strin
 
     private fun startDiscoveryLoop() {
         discoveryJob?.cancel()
-        discoveryJob = scope.launch {
-            while (isActive && !isServiceFound) {
-                startSingleDiscovery()
-                delay(DISCOVERY_INTERVAL)
+        discoveryJob =
+            scope.launch {
+                while (isActive && !isServiceFound) {
+                    startSingleDiscovery()
+                    delay(DISCOVERY_INTERVAL)
+                }
             }
-        }
     }
 
     private fun startMonitoring() {
-        monitoringJob = scope.launch {
-            while (isActive) {
-                if (isServiceFound &&
+        monitoringJob =
+            scope.launch {
+                while (isActive) {
+                    if (isServiceFound &&
                         System.currentTimeMillis() - lastServiceFoundTime > MONITORING_INTERVAL * 2
-                ) {
-                    Log.d(TAG, "Service timeout detected")
-                    handleServiceLost()
+                    ) {
+                        Log.d(TAG, "Service timeout detected")
+                        handleServiceLost()
+                    }
+                    delay(MONITORING_INTERVAL)
                 }
-                delay(MONITORING_INTERVAL)
             }
-        }
     }
 
     private fun handleServiceLost() {
@@ -72,49 +83,55 @@ class NsdHelper(private val context: Context, private val onStatusUpdate: (Strin
         stopCurrentDiscovery()
 
         discoveryListener =
-                object : NsdManager.DiscoveryListener {
-                    override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
-                        Log.e(TAG, "Discovery failed to start with error code: $errorCode")
-                        onStatusUpdate("Discovery failed to start")
-                    }
+            object : NsdManager.DiscoveryListener {
+                override fun onStartDiscoveryFailed(
+                    serviceType: String,
+                    errorCode: Int,
+                ) {
+                    Log.e(TAG, "Discovery failed to start with error code: $errorCode")
+                    onStatusUpdate("Discovery failed to start")
+                }
 
-                    override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
-                        Log.e(TAG, "Discovery failed to stop with error code: $errorCode")
-                        onStatusUpdate("Discovery failed to stop")
-                    }
+                override fun onStopDiscoveryFailed(
+                    serviceType: String,
+                    errorCode: Int,
+                ) {
+                    Log.e(TAG, "Discovery failed to stop with error code: $errorCode")
+                    onStatusUpdate("Discovery failed to stop")
+                }
 
-                    override fun onDiscoveryStarted(serviceType: String) {
+                override fun onDiscoveryStarted(serviceType: String) {
+                    if (!isServiceFound) {
+                        onStatusUpdate(
+                            "Discovery active: Searching for $TARGET_SERVICE_NAME...",
+                        )
+                    }
+                }
+
+                override fun onDiscoveryStopped(serviceType: String) {
+                    if (!isServiceFound) {
+                        onStatusUpdate("Discovery stopped - retrying...")
+                    }
+                }
+
+                override fun onServiceFound(service: NsdServiceInfo) {
+                    if (service.serviceName.contains(TARGET_SERVICE_NAME, ignoreCase = true)) {
+                        lastServiceFoundTime = System.currentTimeMillis()
+
                         if (!isServiceFound) {
-                            onStatusUpdate(
-                                    "Discovery active: Searching for $TARGET_SERVICE_NAME..."
-                            )
-                        }
-                    }
-
-                    override fun onDiscoveryStopped(serviceType: String) {
-                        if (!isServiceFound) {
-                            onStatusUpdate("Discovery stopped - retrying...")
-                        }
-                    }
-
-                    override fun onServiceFound(service: NsdServiceInfo) {
-                        if (service.serviceName.contains(TARGET_SERVICE_NAME, ignoreCase = true)) {
-                            lastServiceFoundTime = System.currentTimeMillis()
-
-                            if (!isServiceFound) {
-                                onStatusUpdate("Found target service: ${service.serviceName}")
-                                resolveService(service)
-                            }
-                        }
-                    }
-
-                    override fun onServiceLost(service: NsdServiceInfo) {
-                        if (service.serviceName.contains(TARGET_SERVICE_NAME, ignoreCase = true)) {
-                            Log.d(TAG, "Target service lost: ${service.serviceName}")
-                            handleServiceLost()
+                            onStatusUpdate("Found target service: ${service.serviceName}")
+                            resolveService(service)
                         }
                     }
                 }
+
+                override fun onServiceLost(service: NsdServiceInfo) {
+                    if (service.serviceName.contains(TARGET_SERVICE_NAME, ignoreCase = true)) {
+                        Log.d(TAG, "Target service lost: ${service.serviceName}")
+                        handleServiceLost()
+                    }
+                }
+            }
 
         try {
             nsdManager.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
@@ -126,39 +143,39 @@ class NsdHelper(private val context: Context, private val onStatusUpdate: (Strin
 
     private fun resolveService(service: NsdServiceInfo) {
         nsdManager.registerServiceInfoCallback(
-                service,
-                { it.run() },
-                object : NsdManager.ServiceInfoCallback {
-                    override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {
-                        Log.e(TAG, "Service info callback registration failed: $errorCode")
-                        onStatusUpdate("Service resolution failed")
-                        isServiceFound = false
-                        _serverHost = null
-                        _serverPort = -1
-                    }
-
-                    override fun onServiceInfoCallbackUnregistered() {}
-
-                    override fun onServiceUpdated(service: NsdServiceInfo) {
-                        val host = service.hostAddresses.firstOrNull()?.hostAddress
-                        Log.d(TAG, "Resolve succeeded: ${service.serviceName}")
-                        Log.d(TAG, "Host: $host, Port: ${service.port}")
-
-                        _serverHost = host
-                        _serverPort = service.port
-
-                        isServiceFound = true
-                        lastServiceFoundTime = System.currentTimeMillis()
-                        onStatusUpdate("Connected to ${service.serviceName}")
-                        nsdManager.unregisterServiceInfoCallback(this)
-                    }
-
-                    override fun onServiceLost() {
-                        Log.d(TAG, "Service lost during resolution")
-                        handleServiceLost()
-                        nsdManager.unregisterServiceInfoCallback(this)
-                    }
+            service,
+            { it.run() },
+            object : NsdManager.ServiceInfoCallback {
+                override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {
+                    Log.e(TAG, "Service info callback registration failed: $errorCode")
+                    onStatusUpdate("Service resolution failed")
+                    isServiceFound = false
+                    _serverHost = null
+                    _serverPort = -1
                 }
+
+                override fun onServiceInfoCallbackUnregistered() {}
+
+                override fun onServiceUpdated(service: NsdServiceInfo) {
+                    val host = service.hostAddresses.firstOrNull()?.hostAddress
+                    Log.d(TAG, "Resolve succeeded: ${service.serviceName}")
+                    Log.d(TAG, "Host: $host, Port: ${service.port}")
+
+                    _serverHost = host
+                    _serverPort = service.port
+
+                    isServiceFound = true
+                    lastServiceFoundTime = System.currentTimeMillis()
+                    onStatusUpdate("Connected to ${service.serviceName}")
+                    nsdManager.unregisterServiceInfoCallback(this)
+                }
+
+                override fun onServiceLost() {
+                    Log.d(TAG, "Service lost during resolution")
+                    handleServiceLost()
+                    nsdManager.unregisterServiceInfoCallback(this)
+                }
+            },
         )
     }
 

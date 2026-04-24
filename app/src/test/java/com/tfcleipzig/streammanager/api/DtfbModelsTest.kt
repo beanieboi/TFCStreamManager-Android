@@ -2,11 +2,10 @@ package com.tfcleipzig.streammanager.api
 
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class DtfbModelsTest {
-
     private val json = Json { ignoreUnknownKeys = true }
 
     @Test
@@ -44,17 +43,18 @@ class DtfbModelsTest {
 
     @Test
     fun teamDetailsResponseDeserialization() {
-        val jsonStr = """
-        {
-            "data": {
-                "team": {"team_id": "10", "teamname": "TFC Leipzig"},
-                "mitglieder": [
-                    {"spieler_id": "1", "nachname": "Doe", "vorname": "John"},
-                    {"spieler_id": "2", "nachname": "Doe", "vorname": "Jane"}
-                ]
+        val jsonStr =
+            """
+            {
+                "data": {
+                    "team": {"team_id": "10", "teamname": "TFC Leipzig"},
+                    "mitglieder": [
+                        {"spieler_id": "1", "nachname": "Doe", "vorname": "John"},
+                        {"spieler_id": "2", "nachname": "Doe", "vorname": "Jane"}
+                    ]
+                }
             }
-        }
-        """.trimIndent()
+            """.trimIndent()
         val response = json.decodeFromString<TeamDetailsResponse>(jsonStr)
         assertEquals("TFC Leipzig", response.data.team.teamname)
         assertEquals(2, response.data.mitglieder.size)

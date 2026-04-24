@@ -127,29 +127,29 @@ class SettingsActivity : AppCompatActivity() {
             try {
                 val dtfbClient = DtfbClient()
 
-                dtfbClient.getLeagueTeams()
-                        .onSuccess { loadedTeams ->
-                            teams = loadedTeams
-                            TeamDataStore.setTeams(loadedTeams)
+                dtfbClient
+                    .getLeagueTeams()
+                    .onSuccess { loadedTeams ->
+                        teams = loadedTeams
+                        TeamDataStore.setTeams(loadedTeams)
 
-                            loadedTeams.forEach { team ->
-                                dtfbClient.getTeamPlayers(team.teamId)
-                                        .onSuccess { players ->
-                                            Log.d(TAG, "Loaded ${players.size} players for team ${team.teamname}")
-                                            TeamDataStore.setTeamPlayers(team.teamId, players)
-                                        }
-                                        .onFailure { e ->
-                                            Log.e(TAG, "Failed to load players for team ${team.teamname}", e)
-                                        }
-                            }
+                        loadedTeams.forEach { team ->
+                            dtfbClient
+                                .getTeamPlayers(team.teamId)
+                                .onSuccess { players ->
+                                    Log.d(TAG, "Loaded ${players.size} players for team ${team.teamname}")
+                                    TeamDataStore.setTeamPlayers(team.teamId, players)
+                                }.onFailure { e ->
+                                    Log.e(TAG, "Failed to load players for team ${team.teamname}", e)
+                                }
+                        }
 
-                            updateTeamDropdowns()
-                            Toast.makeText(this@SettingsActivity, "Teams loaded", Toast.LENGTH_SHORT).show()
-                        }
-                        .onFailure { e ->
-                            Log.e(TAG, "Failed to load teams", e)
-                            Toast.makeText(this@SettingsActivity, "Failed to load teams: ${e.message}", Toast.LENGTH_LONG).show()
-                        }
+                        updateTeamDropdowns()
+                        Toast.makeText(this@SettingsActivity, "Teams loaded", Toast.LENGTH_SHORT).show()
+                    }.onFailure { e ->
+                        Log.e(TAG, "Failed to load teams", e)
+                        Toast.makeText(this@SettingsActivity, "Failed to load teams: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading teams", e)
                 Toast.makeText(this@SettingsActivity, "Error loading teams: ${e.message}", Toast.LENGTH_LONG).show()
@@ -205,11 +205,14 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun setupBackNavigation() {
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                saveAndFinish()
-            }
-        })
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    saveAndFinish()
+                }
+            },
+        )
     }
 
     companion object {
