@@ -12,6 +12,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.net.Inet4Address
 
 class NsdHelper(
     private val context: Context,
@@ -49,9 +50,9 @@ class NsdHelper(
         discoveryJob?.cancel()
         discoveryJob =
             scope.launch {
-                while (isActive && !isServiceFound) {
+                while (isActive) {
                     startSingleDiscovery()
-                    delay(DISCOVERY_INTERVAL)
+                    delay(if (isServiceFound) CONNECTED_REFRESH_INTERVAL else DISCOVERY_INTERVAL)
                 }
             }
     }
@@ -61,7 +62,7 @@ class NsdHelper(
             scope.launch {
                 while (isActive) {
                     if (isServiceFound &&
-                        System.currentTimeMillis() - lastServiceFoundTime > MONITORING_INTERVAL * 2
+                        System.currentTimeMillis() - lastServiceFoundTime > CONNECTED_REFRESH_INTERVAL * 2
                     ) {
                         Log.d(TAG, "Service timeout detected")
                         handleServiceLost()
@@ -157,7 +158,13 @@ class NsdHelper(
                 override fun onServiceInfoCallbackUnregistered() {}
 
                 override fun onServiceUpdated(service: NsdServiceInfo) {
-                    val host = service.hostAddresses.firstOrNull()?.hostAddress
+                    val host =
+                        service.hostAddresses
+                            .filterNot { it.isLinkLocalAddress }
+                            .sortedBy { if (it is Inet4Address) 0 else 1 }
+                            .firstOrNull()
+                            ?.hostAddress
+                            ?: service.hostAddresses.firstOrNull()?.hostAddress
                     Log.d(TAG, "Resolve succeeded: ${service.serviceName}")
                     Log.d(TAG, "Host: $host, Port: ${service.port}")
 
@@ -202,6 +209,7 @@ class NsdHelper(
         private const val SERVICE_TYPE = "_http._tcp."
         const val TARGET_SERVICE_NAME = "TFCStreamServer"
         private const val DISCOVERY_INTERVAL = 2000L
+        private const val CONNECTED_REFRESH_INTERVAL = 10000L
         private const val MONITORING_INTERVAL = 2000L
     }
 }
