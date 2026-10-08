@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.tfcleipzig.streammanager"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.tfcleipzig.streammanager"
