@@ -5,4 +5,6 @@
     <color name="status_connected">#FF4CAF50</color>
     <color name="status_started">#FFFFC107</color>
     <color name="status_disconnected">#FFF44336</color>
+    <color name="goal_flash">#664CAF50</color>
+    <color name="undo_flash">#66F44336</color>
 </resources>
