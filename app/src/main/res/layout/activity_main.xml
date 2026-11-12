@@ -5,86 +5,38 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:keepScreenOn="true"
     tools:context=".MainActivity">
 
-    <View
-        android:id="@+id/statusDot"
-        android:layout_width="16dp"
-        android:layout_height="16dp"
-        android:layout_margin="16dp"
-        android:background="@drawable/status_dot"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <TextView
-        android:id="@+id/teamAScore"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:layout_margin="16dp"
-        android:background="?attr/selectableItemBackground"
-        android:gravity="center"
-        android:text="0"
-        android:textStyle="bold"
-        app:autoSizeMaxTextSize="465sp"
-        app:autoSizeMinTextSize="96sp"
-        app:autoSizeTextType="uniform"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toStartOf="@id/teamBScore"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <TextView
-        android:id="@+id/teamBScore"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:layout_margin="16dp"
-        android:background="?attr/selectableItemBackground"
-        android:gravity="center"
-        android:text="0"
-        android:textStyle="bold"
-        app:autoSizeMaxTextSize="465sp"
-        app:autoSizeMinTextSize="96sp"
-        app:autoSizeTextType="uniform"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@id/teamAScore"
-        app:layout_constraintTop_toTopOf="parent" />
-
+    <!-- Everything that is not a score lives in this strip, so the score halves below never
+         share touch area with another control. -->
     <LinearLayout
-        android:id="@+id/gameButtonsLayout"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:orientation="horizontal"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"/>
-
-    <LinearLayout
-        android:id="@+id/playerSelectLayout"
+        android:id="@+id/topBar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_margin="16dp"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
-        app:layout_constraintBottom_toBottomOf="parent"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toStartOf="@id/settingsButton">
+        app:layout_constraintTop_toTopOf="parent">
 
         <!-- Left team player dropdowns -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:orientation="horizontal"
-            android:layout_marginEnd="8dp">
+            android:orientation="horizontal">
 
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/leftPlayer1Layout"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                 android:layout_width="0dp"
-                android:layout_weight="1"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="4dp"
-                android:hint="Left 1">
+                android:layout_weight="1"
+                android:hint="@string/left_player_1">
 
                 <AutoCompleteTextView
                     android:id="@+id/teamAPlayer1Select"
@@ -98,9 +50,9 @@
                 android:id="@+id/leftPlayer2Layout"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                 android:layout_width="0dp"
-                android:layout_weight="1"
                 android:layout_height="wrap_content"
-                android:hint="Left 2">
+                android:layout_weight="1"
+                android:hint="@string/left_player_2">
 
                 <AutoCompleteTextView
                     android:id="@+id/teamAPlayer2Select"
@@ -111,22 +63,32 @@
             </com.google.android.material.textfield.TextInputLayout>
         </LinearLayout>
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/undoButton"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="wrap_content"
+            android:layout_height="64dp"
+            android:layout_marginHorizontal="16dp"
+            android:enabled="false"
+            android:minWidth="160dp"
+            android:text="@string/undo_last_goal"
+            android:textSize="18sp" />
+
         <!-- Right team player dropdowns -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:orientation="horizontal"
-            android:layout_marginStart="8dp">
+            android:orientation="horizontal">
 
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/rightPlayer1Layout"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                 android:layout_width="0dp"
-                android:layout_weight="1"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="4dp"
-                android:hint="Right 1">
+                android:layout_weight="1"
+                android:hint="@string/right_player_1">
 
                 <AutoCompleteTextView
                     android:id="@+id/teamBPlayer1Select"
@@ -140,9 +102,9 @@
                 android:id="@+id/rightPlayer2Layout"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                 android:layout_width="0dp"
-                android:layout_weight="1"
                 android:layout_height="wrap_content"
-                android:hint="Right 2">
+                android:layout_weight="1"
+                android:hint="@string/right_player_2">
 
                 <AutoCompleteTextView
                     android:id="@+id/teamBPlayer2Select"
@@ -152,16 +114,85 @@
 
             </com.google.android.material.textfield.TextInputLayout>
         </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+
+            <View
+                android:id="@+id/statusDot"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:background="@drawable/status_dot" />
+
+            <TextView
+                android:id="@+id/syncWarning"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/score_not_sent"
+                android:textColor="@color/status_disconnected"
+                android:textSize="12sp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/settingsButton"
+            style="@style/Widget.Material3.Button.IconButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:contentDescription="@string/settings"
+            app:icon="@android:drawable/ic_menu_manage" />
     </LinearLayout>
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/settingsButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:contentDescription="Settings"
+    <!-- The two halves touch each other and fill everything below the top strip. -->
+    <TextView
+        android:id="@+id/teamAScore"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:gravity="center"
+        android:text="0"
+        android:textStyle="bold"
+        app:autoSizeMaxTextSize="465sp"
+        app:autoSizeMinTextSize="96sp"
+        app:autoSizeTextType="uniform"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/teamBScore"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/topBar"
+        tools:ignore="HardcodedText" />
+
+    <TextView
+        android:id="@+id/teamBScore"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:gravity="center"
+        android:text="0"
+        android:textStyle="bold"
+        app:autoSizeMaxTextSize="465sp"
+        app:autoSizeMinTextSize="96sp"
+        app:autoSizeTextType="uniform"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:srcCompat="@android:drawable/ic_menu_manage" />
+        app:layout_constraintStart_toEndOf="@id/teamAScore"
+        app:layout_constraintTop_toBottomOf="@id/topBar"
+        tools:ignore="HardcodedText" />
+
+    <!-- Drawn on top of the halves but not clickable, so touches fall through to them. -->
+    <View
+        android:id="@+id/scoreDivider"
+        android:layout_width="2dp"
+        android:layout_height="0dp"
+        android:layout_marginVertical="24dp"
+        android:background="?attr/colorOutlineVariant"
+        android:importantForAccessibility="no"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/topBar" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

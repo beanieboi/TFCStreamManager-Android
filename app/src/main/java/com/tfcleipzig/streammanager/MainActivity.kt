@@ -1,25 +1,40 @@
 package com.tfcleipzig.streammanager
 
+import android.animation.ObjectAnimator
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Log
-import android.view.GestureDetector
 import android.view.MotionEvent
+import android.view.View
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.ColorRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.isVisible
 import com.tfcleipzig.streammanager.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var nsdHelper: NsdHelper
-    private val scoreUpdater = ScoreUpdater()
+    private lateinit var scoreUpdater: ScoreUpdater
     private lateinit var scoreManager: ScoreManager
+    private lateinit var scoreBoard: ScoreBoard
     private var gameState: GameState = GameState()
+    private var serverStatus: ServerStatus = ServerStatus.NOT_FOUND
+
+    private val touchFilter = GoalTouchFilter()
+    private val flashAnimators = mutableMapOf<Side, ObjectAnimator>()
+    private var vibrator: Vibrator? = null
 
     private lateinit var teamADropdownHelper: PlayerDropdownHelper
     private lateinit var teamBDropdownHelper: PlayerDropdownHelper
@@ -32,10 +47,10 @@ class MainActivity : AppCompatActivity() {
             gameState = SettingsManager.getGameSettings()
             if (result.resultCode == RESULT_OK) {
                 val (savedTeamAScore, savedTeamBScore) = scoreManager.getScores()
-                binding.teamAScore.text = savedTeamAScore.toString()
-                binding.teamBScore.text = savedTeamBScore.toString()
+                scoreBoard.reset(savedTeamAScore, savedTeamBScore)
+                renderScores()
                 updatePlayerDropdowns()
-                saveAndSendScoreUpdate()
+                saveAndSendScore()
             }
         }
 
@@ -46,6 +61,11 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         SettingsManager.init(this)
+        vibrator =
+            getSystemService(VibratorManager::class.java)
+                ?.defaultVibrator
+                ?.takeIf { it.hasVibrator() }
+        scoreUpdater = ScoreUpdater { synced -> binding.syncWarning.isVisible = !synced }
         initializeManagers()
         initializeViews()
         setupScoreHandlers()
@@ -55,17 +75,23 @@ class MainActivity : AppCompatActivity() {
         binding.settingsButton.setOnClickListener {
             settingsLauncher.launch(Intent(this, SettingsActivity::class.java))
         }
+        binding.undoButton.setOnClickListener { undoLastGoal() }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        hideSystemBars()
     }
 
     private fun initializeManagers() {
         scoreManager = ScoreManager(this)
         gameState = SettingsManager.getGameSettings()
+        val (savedTeamAScore, savedTeamBScore) = scoreManager.getScores()
+        scoreBoard = ScoreBoard(savedTeamAScore, savedTeamBScore)
     }
 
     private fun initializeViews() {
-        val (savedTeamAScore, savedTeamBScore) = scoreManager.getScores()
-        binding.teamAScore.text = savedTeamAScore.toString()
-        binding.teamBScore.text = savedTeamBScore.toString()
+        renderScores()
 
         teamADropdownHelper =
             PlayerDropdownHelper(
@@ -75,7 +101,7 @@ class MainActivity : AppCompatActivity() {
             ) { players ->
                 gameState = gameState.copy(teamAPlayer = players)
                 SettingsManager.saveGameSettings(gameState)
-                saveAndSendScoreUpdate()
+                saveAndSendScore()
             }
 
         teamBDropdownHelper =
@@ -86,75 +112,104 @@ class MainActivity : AppCompatActivity() {
             ) { players ->
                 gameState = gameState.copy(teamBPlayer = players)
                 SettingsManager.saveGameSettings(gameState)
-                saveAndSendScoreUpdate()
+                saveAndSendScore()
             }
 
         updatePlayerDropdowns()
     }
 
     private fun setupNsdHelper() {
-        nsdHelper = NsdHelper(this) { status -> updateStatusDot(status) }
+        nsdHelper = NsdHelper(this) { status -> runOnUiThread { onServerStatus(status) } }
         nsdHelper.startDiscovery()
     }
 
-    private fun setupScoreHandlers() {
-        setupScoreGestureDetector(binding.teamAScore)
-        setupScoreGestureDetector(binding.teamBScore)
+    private fun onServerStatus(status: ServerStatus) {
+        val wasRunning = serverStatus == ServerStatus.RUNNING
+        serverStatus = status
+        updateStatusDot(status)
+
+        val (host, port) = nsdHelper.getConnectionDetails()
+        scoreUpdater.endpoint = if (host != null && port != null) Endpoint(host, port) else null
+
+        // A server that just started knows nothing yet; give it the current score.
+        if (status == ServerStatus.RUNNING && !wasRunning) {
+            saveAndSendScore()
+        }
     }
 
-    private fun setupScoreGestureDetector(scoreView: TextView) {
-        val gestureDetector =
-            GestureDetector(
-                this,
-                object : GestureDetector.SimpleOnGestureListener() {
-                    override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                        val current = scoreView.text.toString().toIntOrNull() ?: 0
-                        scoreView.text = (current + 1).toString()
-                        saveAndSendScoreUpdate()
-                        return true
-                    }
+    private fun setupScoreHandlers() {
+        setupScoreView(binding.teamAScore, Side.A)
+        setupScoreView(binding.teamBScore, Side.B)
+    }
 
-                    override fun onDoubleTap(e: MotionEvent): Boolean {
-                        val current = scoreView.text.toString().toIntOrNull() ?: 0
-                        if (current > 0) {
-                            scoreView.text = (current - 1).toString()
-                            saveAndSendScoreUpdate()
-                        }
-                        return true
-                    }
-                },
-            )
-
-        scoreView.setOnTouchListener { _, event ->
-            gestureDetector.onTouchEvent(event)
+    /**
+     * A goal counts the moment a finger lands. There is no tap, double-tap or long-press
+     * detection to wait for, and moving the finger afterwards does not matter. Corrections go
+     * through the Undo button.
+     */
+    private fun setupScoreView(
+        scoreView: TextView,
+        side: Side,
+    ) {
+        scoreView.setOnClickListener { scoreGoal(side) }
+        scoreView.setOnTouchListener { view, event ->
+            val isDown =
+                event.actionMasked == MotionEvent.ACTION_DOWN ||
+                    event.actionMasked == MotionEvent.ACTION_POINTER_DOWN
+            if (isDown && touchFilter.accept(side, event.eventTime)) {
+                view.performClick()
+            }
             true
         }
     }
 
-    private fun saveAndSendScoreUpdate() {
-        val teamAValue =
-            binding.teamAScore.text
-                .toString()
-                .toIntOrNull() ?: 0
-        val teamBValue =
-            binding.teamBScore.text
-                .toString()
-                .toIntOrNull() ?: 0
-        scoreManager.saveScores(teamAValue, teamBValue)
+    private fun scoreGoal(side: Side) {
+        scoreBoard.goal(side)
+        renderScores()
+        giveFeedback(side, R.color.goal_flash, VibrationEffect.EFFECT_HEAVY_CLICK)
+        saveAndSendScore()
+    }
 
-        val (host, port) = nsdHelper.getConnectionDetails()
-        Log.d(TAG, "saveAndSendScoreUpdate: host=$host, port=$port, scores=$teamAValue-$teamBValue")
-        if (host != null && port != null) {
-            scoreUpdater.updateScores(
-                host = host,
-                port = port,
-                teamAScore = teamAValue,
-                teamBScore = teamBValue,
-                gameState = gameState,
-            )
-        } else {
-            Log.w(TAG, "No server connection - score update not sent")
+    private fun undoLastGoal() {
+        val side = scoreBoard.undo() ?: return
+        renderScores()
+        giveFeedback(side, R.color.undo_flash, VibrationEffect.EFFECT_DOUBLE_CLICK)
+        saveAndSendScore()
+    }
+
+    private fun renderScores() {
+        binding.teamAScore.text = scoreBoard.teamA.toString()
+        binding.teamBScore.text = scoreBoard.teamB.toString()
+        binding.teamAScore.contentDescription = getString(R.string.team_a_score, scoreBoard.teamA)
+        binding.teamBScore.contentDescription = getString(R.string.team_b_score, scoreBoard.teamB)
+        binding.undoButton.isEnabled = scoreBoard.canUndo
+    }
+
+    private fun giveFeedback(
+        side: Side,
+        @ColorRes flashColor: Int,
+        vibrationEffect: Int,
+    ) {
+        vibrator?.vibrate(VibrationEffect.createPredefined(vibrationEffect))
+
+        val view = scoreView(side)
+        flashAnimators[side]?.cancel()
+        flashAnimators[side] =
+            ObjectAnimator
+                .ofArgb(view, "backgroundColor", ContextCompat.getColor(this, flashColor), Color.TRANSPARENT)
+                .setDuration(FLASH_DURATION_MS)
+                .also { it.start() }
+    }
+
+    private fun scoreView(side: Side): View =
+        when (side) {
+            Side.A -> binding.teamAScore
+            Side.B -> binding.teamBScore
         }
+
+    private fun saveAndSendScore() {
+        scoreManager.saveScores(scoreBoard.teamA, scoreBoard.teamB)
+        scoreUpdater.submit(ScoreSnapshot(scoreBoard.teamA, scoreBoard.teamB, gameState))
     }
 
     private fun updateStatusDot(status: ServerStatus) {
@@ -164,9 +219,7 @@ class MainActivity : AppCompatActivity() {
                 ServerStatus.STARTED -> R.color.status_started
                 ServerStatus.NOT_FOUND -> R.color.status_disconnected
             }
-        runOnUiThread {
-            binding.statusDot.setBackgroundColor(ContextCompat.getColor(this, color))
-        }
+        binding.statusDot.setBackgroundColor(ContextCompat.getColor(this, color))
     }
 
     private fun updatePlayerDropdowns() {
@@ -180,18 +233,31 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         nsdHelper.stopDiscovery()
+        scoreUpdater.close()
         super.onDestroy()
+    }
+
+    /** Full screen, so the system bars and the edge back gesture stay out of the score halves. */
+    private fun hideSystemBars() {
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
+        }
     }
 
     private fun setupWindowInsets() {
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+            val bars =
+                insets.getInsets(
+                    WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
+                )
+            v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             insets
         }
     }
 
     companion object {
         private const val TAG = "MainActivity"
+        private const val FLASH_DURATION_MS = 300L
     }
 }
