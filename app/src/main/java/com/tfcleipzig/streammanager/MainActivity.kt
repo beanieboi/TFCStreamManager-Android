@@ -93,7 +93,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupNsdHelper() {
-        nsdHelper = NsdHelper(this) { status -> updateStatusDot(status.contains("Connected")) }
+        nsdHelper = NsdHelper(this) { status -> updateStatusDot(status) }
         nsdHelper.startDiscovery()
     }
 
@@ -157,18 +157,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateStatusDot(isConnected: Boolean) {
+    private fun updateStatusDot(status: ServerStatus) {
+        val color =
+            when (status) {
+                ServerStatus.RUNNING -> R.color.status_connected
+                ServerStatus.STARTED -> R.color.status_started
+                ServerStatus.NOT_FOUND -> R.color.status_disconnected
+            }
         runOnUiThread {
-            binding.statusDot.setBackgroundColor(
-                ContextCompat.getColor(
-                    this,
-                    if (isConnected) {
-                        R.color.status_connected
-                    } else {
-                        R.color.status_disconnected
-                    },
-                ),
-            )
+            binding.statusDot.setBackgroundColor(ContextCompat.getColor(this, color))
         }
     }
 
