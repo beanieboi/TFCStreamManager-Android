@@ -60,8 +60,7 @@ class NsdHelper(
         get() = status != ServerStatus.NOT_FOUND
 
     /** Host and port, only while the server is running. */
-    fun getConnectionDetails(): Pair<String?, Int?> =
-        if (status == ServerStatus.RUNNING) Pair(serverHost, serverPort) else Pair(null, null)
+    fun getConnectionDetails(): Pair<String?, Int?> = if (status == ServerStatus.RUNNING) Pair(serverHost, serverPort) else Pair(null, null)
 
     fun startDiscovery() {
         discoveryJob?.cancel()
